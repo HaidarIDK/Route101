@@ -9,7 +9,7 @@ import {
   CardFooter,
 } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { Loader2, Zap } from 'lucide-react';
+import { Loader2, Zap, BarChart3 } from 'lucide-react';
 import {
   useReadContracts,
   useWaitForTransactionReceipt,
@@ -18,6 +18,8 @@ import {
 } from 'wagmi';
 import { toast } from 'sonner';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { AnalyticsDashboard } from '@/components/analytics-dashboard';
+import { useAnalytics } from '@/hooks/use-analytics';
 import { supersimL2A, supersimL2B } from '@eth-optimism/viem/chains';
 import { contracts, l2ToL2CrossDomainMessengerAbi } from '@eth-optimism/viem';
 import { privateKeyToAccount } from 'viem/accounts';
@@ -50,7 +52,7 @@ const CONFIG = {
 // Source Chain Components (Chain A)
 // ============================================================================
 
-const CounterIncrementer = () => {
+const CounterIncrementer = ({ onTransaction }: { onTransaction: (tx: any) => void }) => {
   const { data, writeContract, isPending } = useWriteContract();
   const { isLoading: isWaitingForReceipt } = useWaitForTransactionReceipt({
     hash: data,
@@ -72,6 +74,15 @@ const CounterIncrementer = () => {
       abi: crossChainCounterIncrementerAbi,
       functionName: 'increment',
       args: [BigInt(CONFIG.destinationChain.id), CONFIG.contracts.counter.address],
+    });
+    
+    // Track transaction for analytics
+    onTransaction({
+      timestamp: Date.now(),
+      chainId: CONFIG.sourceChain.id,
+      method: 'incrementer' as const,
+      success: true,
+      blockNumber: BigInt(0), // Will be updated when we get the receipt
     });
     
     toast.success('Cross-chain message sent!', {
@@ -123,7 +134,7 @@ const CounterIncrementer = () => {
   );
 };
 
-const DirectMessengerCall = () => {
+const DirectMessengerCall = ({ onTransaction }: { onTransaction: (tx: any) => void }) => {
   const { writeContract, isPending, data } = useWriteContract();
   const { isLoading: isWaitingForReceipt } = useWaitForTransactionReceipt({
     hash: data,
@@ -154,6 +165,15 @@ const DirectMessengerCall = () => {
         CONFIG.contracts.counter.address,
         incrementFunctionData,
       ],
+    });
+    
+    // Track transaction for analytics
+    onTransaction({
+      timestamp: Date.now(),
+      chainId: CONFIG.sourceChain.id,
+      method: 'direct' as const,
+      success: true,
+      blockNumber: BigInt(0), // Will be updated when we get the receipt
     });
     
     toast.success('Direct message sent!', {
@@ -209,16 +229,16 @@ const DirectMessengerCall = () => {
   );
 };
 
-const SourceChain = () => (
+const SourceChain = ({ onTransaction }: { onTransaction: (tx: any) => void }) => (
   <div className="flex-1 flex flex-col gap-4 p-4">
     <div className="flex items-center justify-between">
       <div className="text-xl font-semibold">
         Chain: {CONFIG.sourceChain.name} ({CONFIG.sourceChain.id})
       </div>
     </div>
-    <CounterIncrementer />
+    <CounterIncrementer onTransaction={onTransaction} />
     <Separator />
-    <DirectMessengerCall />
+    <DirectMessengerCall onTransaction={onTransaction} />
   </div>
 );
 
@@ -367,6 +387,9 @@ const DestinationChain = () => {
 // ============================================================================
 
 function App() {
+  const [activeTab, setActiveTab] = useState<'counter' | 'analytics'>('counter');
+  const analytics = useAnalytics();
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -397,11 +420,41 @@ function App() {
             Experience the power of Superchain interop with real-time cross-chain messaging
           </p>
         </div>
-        
-        <div className="flex gap-4">
-          <SourceChain />
-          <DestinationChain />
+
+        {/* Tab Navigation */}
+        <div className="flex space-x-1 mb-6">
+          <Button
+            variant={activeTab === 'counter' ? 'default' : 'ghost'}
+            onClick={() => setActiveTab('counter')}
+            className="flex items-center gap-2"
+          >
+            <Zap className="h-4 w-4" />
+            Counter Demo
+          </Button>
+          <Button
+            variant={activeTab === 'analytics' ? 'default' : 'ghost'}
+            onClick={() => setActiveTab('analytics')}
+            className="flex items-center gap-2"
+          >
+            <BarChart3 className="h-4 w-4" />
+            Analytics
+          </Button>
         </div>
+        
+        {activeTab === 'counter' && (
+          <div className="flex gap-4">
+            <SourceChain onTransaction={analytics.addTransaction} />
+            <DestinationChain />
+          </div>
+        )}
+
+        {activeTab === 'analytics' && (
+          <AnalyticsDashboard
+            transactions={analytics.transactions}
+            counterValue={BigInt(0)} // This will be updated with real data
+            lastIncrementer={{ chainId: BigInt(0), sender: '0x...' }}
+          />
+        )}
       </main>
     </div>
   );
