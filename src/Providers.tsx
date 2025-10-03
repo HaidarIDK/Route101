@@ -1,6 +1,8 @@
 import { createConfig, http, WagmiProvider } from 'wagmi';
 import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
 import { supersimL2A, supersimL2B } from '@eth-optimism/viem/chains';
+import { ThemeProvider } from '@/components/theme-provider';
+import { Toaster } from '@/components/ui/sonner';
 
 const queryClient = new QueryClient();
 
@@ -26,8 +28,13 @@ const config = createConfig({
 
 export const Providers = ({ children }: { children: React.ReactNode }) => {
   return (
-    <WagmiProvider config={config}>
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-    </WagmiProvider>
+    <ThemeProvider defaultTheme="system" storageKey="route101-ui-theme">
+      <WagmiProvider config={config}>
+        <QueryClientProvider client={queryClient}>
+          {children}
+          <Toaster />
+        </QueryClientProvider>
+      </WagmiProvider>
+    </ThemeProvider>
   );
 };

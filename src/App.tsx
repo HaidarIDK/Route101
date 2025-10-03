@@ -9,13 +9,15 @@ import {
   CardFooter,
 } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Zap } from 'lucide-react';
 import {
   useReadContracts,
   useWaitForTransactionReceipt,
   useWatchContractEvent,
   useWriteContract,
 } from 'wagmi';
+import { toast } from 'sonner';
+import { ThemeToggle } from '@/components/theme-toggle';
 import { supersimL2A, supersimL2B } from '@eth-optimism/viem/chains';
 import { contracts, l2ToL2CrossDomainMessengerAbi } from '@eth-optimism/viem';
 import { privateKeyToAccount } from 'viem/accounts';
@@ -62,6 +64,22 @@ const CounterIncrementer = () => {
       ? 'Sending...'
       : 'Increment';
 
+  const handleIncrement = () => {
+    writeContract({
+      account: CONFIG.devAccount,
+      chainId: CONFIG.sourceChain.id,
+      address: CONFIG.contracts.counterIncrementer.address,
+      abi: crossChainCounterIncrementerAbi,
+      functionName: 'increment',
+      args: [BigInt(CONFIG.destinationChain.id), CONFIG.contracts.counter.address],
+    });
+    
+    toast.success('Cross-chain message sent!', {
+      description: `Incrementing counter on ${CONFIG.destinationChain.name}`,
+      duration: 3000,
+    });
+  };
+
   return (
     <>
       <div className="text-sm text-muted-foreground">
@@ -91,16 +109,7 @@ const CounterIncrementer = () => {
         <CardFooter className="flex">
           <Button
             className="flex-1"
-            onClick={() =>
-              writeContract({
-                account: CONFIG.devAccount,
-                chainId: CONFIG.sourceChain.id,
-                address: CONFIG.contracts.counterIncrementer.address,
-                abi: crossChainCounterIncrementerAbi,
-                functionName: 'increment',
-                args: [BigInt(CONFIG.destinationChain.id), CONFIG.contracts.counter.address],
-              })
-            }
+            onClick={handleIncrement}
             disabled={isPending || isWaitingForReceipt}
           >
             {(isPending || isWaitingForReceipt) && (
@@ -132,6 +141,26 @@ const DirectMessengerCall = () => {
     abi: crossChainCounterAbi,
     functionName: 'increment',
   });
+
+  const handleDirectMessage = () => {
+    writeContract({
+      account: CONFIG.devAccount,
+      chainId: CONFIG.sourceChain.id,
+      address: contracts.l2ToL2CrossDomainMessenger.address,
+      abi: l2ToL2CrossDomainMessengerAbi,
+      functionName: 'sendMessage',
+      args: [
+        BigInt(CONFIG.destinationChain.id),
+        CONFIG.contracts.counter.address,
+        incrementFunctionData,
+      ],
+    });
+    
+    toast.success('Direct message sent!', {
+      description: `Using L2ToL2CrossDomainMessenger to ${CONFIG.destinationChain.name}`,
+      duration: 3000,
+    });
+  };
 
   return (
     <>
@@ -166,20 +195,7 @@ const DirectMessengerCall = () => {
         <CardFooter>
           <Button
             className="flex-1"
-            onClick={() =>
-              writeContract({
-                account: CONFIG.devAccount,
-                chainId: CONFIG.sourceChain.id,
-                address: contracts.l2ToL2CrossDomainMessenger.address,
-                abi: l2ToL2CrossDomainMessengerAbi,
-                functionName: 'sendMessage',
-                args: [
-                  BigInt(CONFIG.destinationChain.id),
-                  CONFIG.contracts.counter.address,
-                  incrementFunctionData,
-                ],
-              })
-            }
+            onClick={handleDirectMessage}
             disabled={isPending || isWaitingForReceipt}
           >
             {(isPending || isWaitingForReceipt) && (
@@ -195,8 +211,10 @@ const DirectMessengerCall = () => {
 
 const SourceChain = () => (
   <div className="flex-1 flex flex-col gap-4 p-4">
-    <div className="text-xl font-semibold">
-      Chain: {CONFIG.sourceChain.name} ({CONFIG.sourceChain.id})
+    <div className="flex items-center justify-between">
+      <div className="text-xl font-semibold">
+        Chain: {CONFIG.sourceChain.name} ({CONFIG.sourceChain.id})
+      </div>
     </div>
     <CounterIncrementer />
     <Separator />
@@ -253,6 +271,14 @@ const DestinationChain = () => {
         })),
       ]);
       refetch();
+      
+      // Show notification for each new increment
+      newLogs.forEach(log => {
+        toast.success('Counter incremented! 🎉', {
+          description: `New value: ${log.args.newValue?.toString()} from chain ${log.args.senderChainId?.toString()}`,
+          duration: 4000,
+        });
+      });
     },
   });
 
@@ -342,9 +368,41 @@ const DestinationChain = () => {
 
 function App() {
   return (
-    <div className="flex gap-4">
-      <SourceChain />
-      <DestinationChain />
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="container flex h-14 max-w-screen-2xl items-center">
+          <div className="mr-4 flex">
+            <a className="mr-6 flex items-center space-x-2" href="/">
+              <Zap className="h-6 w-6" />
+              <span className="font-bold">Route101</span>
+            </a>
+          </div>
+          <div className="flex flex-1 items-center justify-between space-x-2 md:justify-end">
+            <div className="w-full flex-1 md:w-auto md:flex-none">
+              <span className="text-sm text-muted-foreground">
+                Cross-Chain Counter Demo
+              </span>
+            </div>
+            <ThemeToggle />
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="container mx-auto p-4">
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold tracking-tight">Cross-Chain Counter</h1>
+          <p className="text-muted-foreground">
+            Experience the power of Superchain interop with real-time cross-chain messaging
+          </p>
+        </div>
+        
+        <div className="flex gap-4">
+          <SourceChain />
+          <DestinationChain />
+        </div>
+      </main>
     </div>
   );
 }
